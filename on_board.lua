@@ -21,14 +21,20 @@ local device = nil
 -- poll something via fiber
 local function poll_dev()
   while 0 == 0 do
-    device:auto_increment{{
-      message = 'hello from device!',
+    device:auto_increment{
+
+      -- device id
+      cfg.uuid,
+
+      -- Message [[
+      {message = 'hello from device!',
       device = {
         space_name = cfg.space_name,
         uuid = cfg.uuid
-      }
-    }}
-    print("inserted = ", device:count())
+      }}
+      -- ]]
+    }
+    print("inserted = ", device:len())
     fiber.sleep(1)
   end
 end
@@ -46,7 +52,12 @@ end
   if not device then
     box.schema.user.grant('guest', 'read,write,execute', 'universe')
     device = box.schema.space.create(cfg.space_name)
-    device:create_index('primary', {})
+    device:create_index('msgs', {})
+    device:create_index('devices', {
+      type = "tree",
+      unique = false,
+      parts = { 2, 'str' }
+    })
   end
 
   -- Admin console
