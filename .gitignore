@@ -1,2 +1,5 @@
-sandbox
+sandbox/
 tarantool*
+flash-devkits*
+*.xlog
+*.snap
