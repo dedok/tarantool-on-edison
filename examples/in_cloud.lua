@@ -16,42 +16,77 @@ box.once('give_rights', function()
   box.schema.user.grant('guest', 'read,write,execute', 'universe')
 end)
 
+local devices = {}
+
 -- Add spaces. Each device have own space for brotcast messages to cloud
 function add_device(device_name)
-  local device = box.schema.space.create(device_name, {if_not_exists = true})
-  device:create_index('message_bus', {if_not_exists = true})
+
+  -- message bus
+  local message_bus = box.schema.space.create(device_name .. '_mbus', {
+    if_not_exists = true})
+  message_bus:create_index('pk', {if_not_exists = true})
+
+  -- settings
+  local settings = box.schema.space.create(device_name .. '_settings', {
+    if_not_exists = true})
+  settings:create_index('pk', {
+    if_not_exists = true,
+    type = 'HASH',
+    parts = {1, 'STR'}
+  })
+
+  -- sensors timeline
+  local sensors_timeline = box.schema.space.create(
+    device_name .. '_sensors_timeline', {if_not_exists = true})
+
+  sensors_timeline:create_index('pk', {if_not_exists = true})
+  sensors_timeline:create_index('ttl', {
+    if_not_exists = true,
+    type = 'TREE',
+    unique = false,
+    parts = {2, 'NUM'}
+  })
+
+  devices[device_name] = {
+    message_bus = message_bus,
+    settings = settings,
+    sensors_timeline = sensors_timeline
+  }
+
   return add_device
 end
 
-add_device('edison_1')('edison_2')
+-- Add devices
+add_device('edison_1')
 
 -- Setup replication
 box.cfg {
   -- FIXME Add here your hosts
-  replication_source = { '192.168.1.43:3301', '192.168.1.45:3301'}
+  replication_source = { '192.168.1.43:3301' }--, '192.168.1.45:3301'}
 }
+
+
+-- API
 
 -- Entry point
 --
 function cloud_work()
 
-  local function process_messages(device)
+  -- Cloud work helpers
+  local function process_sensors_timeline(device)
+
+    local sensors_timeline = device.sensors_timeline
     -- Loop over new messages
-    for _, tuple in pairs(device:select({0}, {iterator="GE"})) do
-      local id = tuple:unpack()
+    for _, tuple in pairs(sensors_timeline:select()) do
       log.error(yaml.encode(tuple))
-      device:delete({id})
     end
   end
 
-  -- For easy understanding we add devices manually
-  local devices = { box.space.edison_1, box.space.edison_2 }
-
   -- Loop over devices
-  while 0 == 0 do
+  while true do
     log.error('process_message_bus - cycle')
     for _, device in pairs(devices) do
-      process_messages(device)
+      process_sensors_timeline(device)
     end
     fiber.sleep(1)
   end
