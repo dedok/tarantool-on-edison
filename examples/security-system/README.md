@@ -105,9 +105,12 @@ $ cat set
 {"result": true}
 ```
 
+-----------------------------
+
 * Web GUI - [ReactJS](https://facebook.github.io/react/)
 * REST api - [Tarantool NginX Upstream](https://github.com/tarantool/nginx_upstream_module)
 * Синхронизация данных, управления на устройством(ами) и сloud - [tarantool](http://tarantool.org)
+* Работа с сенсорами: [MRAA](https://github.com/intel-iot-devkit/mraa)
 
 -----------------------------
 
