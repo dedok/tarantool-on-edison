@@ -25,7 +25,9 @@ $ ./tarantool.lua # или tarantool tarantool.lua
 ``` bash
 $ rm *.{xlog,snap}
 ```
+Полная документация: http://tarantool.org/doc/reference/box.html
 
+-----------------
 About Tarantool: http://tarantool.org
 
 About yocto: https://www.yoctoproject.org
