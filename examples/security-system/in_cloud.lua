@@ -114,14 +114,14 @@ end
 local Api = {}
 
 function Api.list(self)
-  local result = {}
+  local list = {}
   for device_name, device in pairs(devices.list) do
-    table.insert(result, {
+    table.insert(list, {
       device_name = device_name,
-      list = devices:get_device_data(device)
+      data = devices:get_device_data(device)
     })
   end
-  return result
+  return {list=list}
 end
 
 function Api.set(self, device_name, sensor_name, new_setting)
@@ -136,20 +136,23 @@ function Api.set(self, device_name, sensor_name, new_setting)
       -- merge & replace
       setting.max = new_setting.max
       settings:replace{sensor_name, setting}
-      return {true}
+      return {{result=true}}
     end
   end
-  return {false}
+  return {{result=false}}
 end
 
 function Api.get(self, device_name)
   if device_name then
     local device = devices.list[device_name]
     if device then
-      return devices:get_device_data(device)
+      return {
+        device_name = device_name,
+        data = devices:get_device_data(device)
+      }
     end
   end
-  return {false}
+  return {{result=false}}
 end
 
 -- Http - Rest
@@ -162,7 +165,7 @@ function api(http_request, ...)
   elseif string.find(method, '/api/set', 1) == 1 then
     return Api:set(...)
   end
-  return {false}
+  return {{result=false}}
 end
 --
 -- ]]
