@@ -36,7 +36,12 @@ local function test_max_value(self, sensor_data)
   local settings_space = box.space[cfg.settings_name]
   local tuple = settings_space:get{name}
   if not tuple then
-    settings_space:insert{name, {max = self.default_max, alert = false}}
+    settings_space:insert{name, {
+      max = self.default_max,
+      measure = self.measure,
+      comment = self.comment,
+      alert = false
+    }}
     tuple = settings_space:get{name}
   end
   local _, settings = tuple:unpack()

@@ -5,21 +5,26 @@ local fiber = require('fiber')
 local log = require('log')
 local yaml = require('yaml')
 
--- Init Tarantool
+-- Init Tarantool [[
 box.cfg {
   listen = '*:3301',
-  log_level = 3,
+  log_level = 5,
   wal_mode = 'write'
 }
 
 box.once('give_rights', function()
   box.schema.user.grant('guest', 'read,write,execute', 'universe')
 end)
+-- ]]
 
 -- Devices object
 local devices = { list = {} }
 
--- Add spaces. Each device have own space for brotcast messages to cloud
+-- Add device.
+-- Each device have own spaces:
+--   device_name + '_settings' - store & exchange settings
+--   device_name + '_sensors_timeline' - store & exchange sensors data
+--
 function devices.add_device(self, device_name)
 
   -- settings
@@ -51,18 +56,28 @@ function devices.add_device(self, device_name)
   return self.add_device
 end
 
-function devices.init_once(self)
+-- Init devices.
+-- new_devices - {
+--  name = STR               - uniq device name
+--  replication_source = STR - device host, for master-master replication
+-- }
+--
+function devices.init_once(self, new_devices)
+  local replication_source = {}
+
   -- Add devices
-  self:add_device('edison_1')
+  for _, device in pairs(new_devices) do
+    self:add_device(device.name)
+    table.insert(replication_source, device.replication_source)
+  end
 
   -- Setup replication
-  box.cfg {
-    -- FIXME Add here your hosts
-    replication_source = { '192.168.1.45:3301' }--, '192.168.1.45:3301'}
-  }
+  box.cfg{replication_source = replication_source}
 end
 
--- API
+--
+-- Public API [[
+--
 function devices.get_device_data(self, device)
   local settings = device.settings
   local sensors_timeline = device.sensors_timeline
@@ -84,11 +99,11 @@ function devices.get_device_data(self, device)
   for sensor_name, series in pairs(series) do
     local _, setting = settings:get{sensor_name}:unpack()
     table.insert(result, {
-      sensor_name = sensor_name,
-      name = settings.name,
-      measure = settings.measure,
-      max = settings.max,
-      alarm = settings.alarm,
+      sensor_name = setting.sensor_name,
+      name = setting.comment,
+      measure = setting.measure,
+      max = setting.max,
+      alarm = setting.alarm,
       series = series
     })
   end
@@ -96,7 +111,9 @@ function devices.get_device_data(self, device)
   return result
 end
 
-function api_list()
+local Api = {}
+
+function Api.list(self)
   local result = {}
   for device_name, device in pairs(devices.list) do
     table.insert(result, {
@@ -107,33 +124,57 @@ function api_list()
   return result
 end
 
-function api_get(device_name)
-  local device = devices.list[device_name]
-  if device then
-    return get_device_data(device)
-  end
-  return {}
-end
-
-function api_set(device_name, sensor_name, new_setting)
+function Api.set(self, device_name, sensor_name, new_setting)
   local device = devices.list[device_name]
   if device and
     -- validate new setting
     new_setting.max
   then
-    local _, setting = device.setting:get{sensor_name}:unpack()
+    local settings = device.settings
+    local _, setting = settings:get{sensor_name}:unpack()
     if setting then
       -- merge & replace
       setting.max = new_setting.max
-      device.settings:replace{sensor_name, setting}
+      settings:replace{sensor_name, setting}
       return {true}
     end
   end
   return {false}
 end
 
--- Start
-devices:init_once()
+function Api.get(self, device_name)
+  if device_name then
+    local device = devices.list[device_name]
+    if device then
+      return devices:get_device_data(device)
+    end
+  end
+  return {false}
+end
+
+-- Http - Rest
+function api(http_request, ...)
+  local method = http_request.uri
+  if string.find(method, '/api/get', 1) == 1 then
+    return Api:get(http_request.args.name)
+  elseif string.find(method, '/api/list', 1) == 1 then
+    return Api:list()
+  elseif string.find(method, '/api/set', 1) == 1 then
+    return Api:set(...)
+  end
+  return {false}
+end
+--
+-- ]]
+--
+
+-- Setup devices then start
+devices:init_once({
+  {
+    name = 'edison_1',
+    replication_source = '192.168.1.45:3301'
+  }
+})
 
 fiber.create(function()
   -- Cloud work helpers
@@ -143,13 +184,20 @@ fiber.create(function()
     end
   end
 
+  local debug = true
   -- Loop over devices
   while true do
-    for _, device in pairs(devices.list) do
-      -- Just for test [[
-      dump_space(device.settings)
-      dump_space(device.sensors_timeline)
-      -- ]]
+    if debug then
+      log.error('=============================')
+      log.error('Debug:')
+      for _, device in pairs(devices.list) do
+        -- Just for test [[
+        dump_space(device.settings)
+        dump_space(device.sensors_timeline)
+        -- ]]
+      end
+      log.error('~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+      log.error('')
     end
     fiber.sleep(1)
   end
