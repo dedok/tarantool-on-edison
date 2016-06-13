@@ -10,7 +10,8 @@
 ## Russian documentation
 ------------------------
 
-Внимание! Если есть вопросы задавайте в isues.
+Внимание!
+Есть вопрос - задай в issues.
 
 Прототип системы безопастности.
 На основание громкости звука, кол-во света и температуры - включает тревогу как на устройстве(ах), так и на севере(далее cloud).
@@ -22,7 +23,7 @@ C помощью master-master репликации данные на устро
 ------
 Внимание!
 Предпологается что tarantool, nginx upstream, mraa(только на девайсах) установленны.
-И что replication_source в in_cloud.lua и in_device.lua настроены на ваши хосты.
+И что replication_source в in_cloud.lua(devices:init_one) и in_device.lua(replication_source) настроены на ваши хосты.
 
 Файлы
 * in_cloud.lua - cloud приложения
