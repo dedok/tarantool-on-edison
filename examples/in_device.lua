@@ -7,8 +7,12 @@ local yaml = require('yaml')
 local log = require('log')
 
 -- Device cfg
+local DEVICE_NAME = 'edison_1'
+
 local cfg = {
-  device_name = 'edison_1',
+  device_name = DEVICE_NAME,
+  settings_name = DEVICE_NAME .. '_settings',
+  sensors_timeline_name = DEVICE_NAME .. '_sensors_timeline',
 }
 
 -- Init master - master [[
@@ -29,15 +33,16 @@ box.cfg {
 -- Abstract helpers [[
 local function test_max_value(self, sensor_data)
   local name = self.name
-  local tuple = settings:get{name}
+  local settings_space = box.space[cfg.settings_name]
+  local tuple = settings_space:get{name}
   if not tuple then
-    settings:insert{name, {max = self.default_max, alert = false}}
-    tuple = settings:get{name}
+    settings_space:insert{name, {max = self.default_max, alert = false}}
+    tuple = settings_space:get{name}
   end
-  local _, settings = settings[1]:unpack()
-  if sensor_data[self.name] > settings.max then
+  local _, settings = tuple:unpack()
+  if sensor_data > settings.max then
     settings.alert = true
-    settings:replace{name, settings}
+    settings_space:replace{name, settings}
   end
   return settings.alert
 end
@@ -52,9 +57,8 @@ end
 device =  {
 
   -- Spaces references
-  message_bus = box.space[cfg.device_name .. '_mbus'],
-  settings = box.space[cfg.device_name .. '_settings'],
-  sensors_timeline = box.space[cfg.device_name .. '_sensors_timeline'],
+  settings = box.space[cfg.settings_name],
+  sensors_timeline = box.space[cfg.sensors_timeline_name],
 
   -- Sensors e.g input sensors
   sensors = {
@@ -62,6 +66,8 @@ device =  {
     light = {
       io = mraa.Aio(0),
       name = 'light',
+      comment = 'Light sensor AIO(0)',
+      measure = 'lm',
       default_max = 100,
 
       get_data = aio_read,
@@ -71,6 +77,8 @@ device =  {
     temperature = {
       io = mraa.Aio(1),
       name = 'temperature',
+      comment = 'Temperature sensor AIO(1)',
+      measure = 'C',
       default_max = 30,
 
       get_data = function(self)
@@ -86,6 +94,8 @@ device =  {
     sound = {
       io = mraa.Aio(2),
       name = 'sound',
+      comment = 'Sound sensor AIO(2)',
+      measure = 'DdB',
       default_max = 100,
 
       get_data = aio_read,
@@ -97,20 +107,42 @@ device =  {
   alert = {
 
     initialised = false,
+    cycles = 0,
 
     diod_light = mraa.Gpio(4),
     buzzer = mraa.Gpio(8),
 
+    off = function(self)
+      self.diod_light:write(0)
+      self.buzzer:write(0)
+    end,
+
+    on = function(self)
+      self.diod_light:write(1)
+      self.buzzer:write(1)
+    end,
+
     init_once = function(self)
-      if not initialised then
+      if not self.initialised then
         self.diod_light:dir(mraa.DIR_OUT)
         self.buzzer:dir(mraa.DIR_OUT)
-        initialised = true
+        self:off()
+
+        self.initialised = true
       end
     end,
 
     alert = function(self, state)
       self:init_once()
+      if 0 == 1 and state then
+        if self.cycles < 3 then
+          self:on()
+          self.cycles = self.cycles + 1
+        else
+          self:off()
+          self.cycles = 0
+        end
+      end
     end
   }
 }

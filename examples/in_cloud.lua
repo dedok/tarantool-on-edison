@@ -5,7 +5,7 @@ local fiber = require('fiber')
 local log = require('log')
 local yaml = require('yaml')
 
--- Init
+-- Init Tarantool
 box.cfg {
   listen = '*:3301',
   log_level = 3,
@@ -16,15 +16,11 @@ box.once('give_rights', function()
   box.schema.user.grant('guest', 'read,write,execute', 'universe')
 end)
 
-local devices = {}
+-- Devices object
+local devices = { list = {} }
 
 -- Add spaces. Each device have own space for brotcast messages to cloud
-function add_device(device_name)
-
-  -- message bus
-  local message_bus = box.schema.space.create(device_name .. '_mbus', {
-    if_not_exists = true})
-  message_bus:create_index('pk', {if_not_exists = true})
+function devices.add_device(self, device_name)
 
   -- settings
   local settings = box.schema.space.create(device_name .. '_settings', {
@@ -47,51 +43,114 @@ function add_device(device_name)
     parts = {2, 'NUM'}
   })
 
-  devices[device_name] = {
-    message_bus = message_bus,
+  self.list[device_name] = {
     settings = settings,
     sensors_timeline = sensors_timeline
   }
 
-  return add_device
+  return self.add_device
 end
 
--- Add devices
-add_device('edison_1')
+function devices.init_once(self)
+  -- Add devices
+  self:add_device('edison_1')
 
--- Setup replication
-box.cfg {
-  -- FIXME Add here your hosts
-  replication_source = { '192.168.1.43:3301' }--, '192.168.1.45:3301'}
-}
-
+  -- Setup replication
+  box.cfg {
+    -- FIXME Add here your hosts
+    replication_source = { '192.168.1.45:3301' }--, '192.168.1.45:3301'}
+  }
+end
 
 -- API
+function devices.get_device_data(self, device)
+  local settings = device.settings
+  local sensors_timeline = device.sensors_timeline
 
--- Entry point
---
-function cloud_work()
+  local series, result = {}, {}
 
+  -- Series, note: sensors_timeline is ordered by ticks
+  for _, tuple in pairs(sensors_timeline:select{}) do
+    local id, ticks, sensors = tuple:unpack()
+    for sensor_name, value in pairs(sensors) do
+      if series[sensor_name] == nil then
+        series[sensor_name] = {}
+      end
+      table.insert(series[sensor_name], value)
+    end
+  end
+
+  -- Join sensors on settings on sensor_name
+  for sensor_name, series in pairs(series) do
+    local _, setting = settings:get{sensor_name}:unpack()
+    table.insert(result, {
+      sensor_name = sensor_name,
+      name = settings.name,
+      measure = settings.measure,
+      max = settings.max,
+      alarm = settings.alarm,
+      series = series
+    })
+  end
+
+  return result
+end
+
+function api_list()
+  local result = {}
+  for device_name, device in pairs(devices.list) do
+    table.insert(result, {
+      device_name = device_name,
+      list = devices:get_device_data(device)
+    })
+  end
+  return result
+end
+
+function api_get(device_name)
+  local device = devices.list[device_name]
+  if device then
+    return get_device_data(device)
+  end
+  return {}
+end
+
+function api_set(device_name, sensor_name, new_setting)
+  local device = devices.list[device_name]
+  if device and
+    -- validate new setting
+    new_setting.max
+  then
+    local _, setting = device.setting:get{sensor_name}:unpack()
+    if setting then
+      -- merge & replace
+      setting.max = new_setting.max
+      device.settings:replace{sensor_name, setting}
+      return {true}
+    end
+  end
+  return {false}
+end
+
+-- Start
+devices:init_once()
+
+fiber.create(function()
   -- Cloud work helpers
-  local function process_sensors_timeline(device)
-
-    local sensors_timeline = device.sensors_timeline
-    -- Loop over new messages
-    for _, tuple in pairs(sensors_timeline:select()) do
+  local function dump_space(space)
+    for _, tuple in pairs(space:select()) do
       log.error(yaml.encode(tuple))
     end
   end
 
   -- Loop over devices
   while true do
-    log.error('process_message_bus - cycle')
-    for _, device in pairs(devices) do
-      process_sensors_timeline(device)
+    for _, device in pairs(devices.list) do
+      -- Just for test [[
+      dump_space(device.settings)
+      dump_space(device.sensors_timeline)
+      -- ]]
     end
     fiber.sleep(1)
   end
-
-end
-
--- Start fiber thread
-fiber.create(cloud_work)
+end)
