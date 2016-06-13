@@ -102,7 +102,7 @@ $ cat set
 ```
 ``` json
 {"result": true}
-``
+```
 
 * Web GUI - [ReactJS](https://facebook.github.io/react/)
 * REST api - [Tarantool NginX Upstream](https://github.com/tarantool/nginx_upstream_module)
