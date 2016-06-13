@@ -12,7 +12,7 @@
 Репликация и fiber
 
 ###
-Внимание! Перед запуском необходимо с конфигурировать replication_source, с.м. файлы: master_1.lua, master_2.lua
+Внимание! Перед запуском необходимо сконфигурировать replication_source, с.м. файлы: master_1.lua, master_2.lua.
 
 Запускаем 1-го master
 ``` bash
