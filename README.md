@@ -17,3 +17,5 @@
 * в каждой директории лежит README.md
 
 About Tarantool: http://tarantool.org
+About yocto: https://www.yoctoproject.org
+About Intel mraa: https://github.com/intel-iot-devkit/mraa
