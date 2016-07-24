@@ -4,8 +4,8 @@ local mqtt = require('mqtt')
 local fiber = require('fiber')
 
 local function say(msg)
-	local yaml = require('yaml')
-	require('log').error(yaml.encode(msg))
+  local yaml = require('yaml')
+  require('log').error(yaml.encode(msg))
 end
 
 conn = mqtt.new()
